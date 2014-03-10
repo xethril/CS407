@@ -7,11 +7,23 @@
     android:layout_height="match_parent"
     android:orientation="vertical" >
     
+    <!-- Scan interval display -->
+    <TextView 
+        android:id="@+id/scan_interval"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+    
+    <!-- Horizontal divider -->
+    <View
+    	android:layout_width="fill_parent"
+    	android:layout_height="1dp"
+    	android:background="@android:color/darker_gray" />
+    
     <!-- The list of nearby bluetooth devices -->
     <ListView
+        android:id="@+id/list_bt_devices"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-    	android:fillViewport="true" >
+        android:layout_height="wrap_content" >
 		
     </ListView>
 

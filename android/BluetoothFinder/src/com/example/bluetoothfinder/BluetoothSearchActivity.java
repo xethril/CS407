@@ -2,7 +2,7 @@ package com.example.bluetoothfinder;
 
 import java.util.Date;
 
-import android.app.ListActivity;
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -11,19 +11,23 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
-public class BluetoothSearchActivity extends ListActivity {
+public class BluetoothSearchActivity extends Activity {
 
 	private BluetoothAdapter mBluetoothAdapter;
 	private BluetoothSignalAdapter mSignalAdapter;
 	private boolean mScanning;
 	private Date mDate;
 	private Handler mHandler;
+	private boolean mCanSeeBeacon;
+	private int mWaitPeriod = 5000; // Wait for 5 secs between scans by default
 	
 	private static final int REQUEST_ENABLE_BT = 1;
 	private static final int SCAN_PERIOD = 1000; // Scan for 1 sec at a time
-	private static final int WAIT_PERIOD = 5000; // Wait for 20 secs between scans
+	private static final int MAX_SCAN_INTERVAL = 300000; // 5 min
 	
 	// Create a callback to be run each time a new BLE device is discovered
 	private BluetoothAdapter.LeScanCallback mLeScanCallback = 
@@ -36,6 +40,9 @@ public class BluetoothSearchActivity extends ListActivity {
 				@Override
 				public void run() {
 					if (!mSignalAdapter.hasDeviceWithAddr(device.getAddress())) {
+						// Signal to app that a beacon is nearby
+						mCanSeeBeacon = true;
+						
 						// Add the BLE signal to our list adapter
 						mSignalAdapter.addSignal(
 								new BluetoothSignal(device.getName(), 
@@ -48,6 +55,7 @@ public class BluetoothSearchActivity extends ListActivity {
 						mSignalAdapter.updateRssiForDevice(device.getAddress(), rssi);
 						mSignalAdapter.updateTimestampForDevice(device.getAddress(), mDate.getTime());
 					}
+					// TODO: Add this signal to a list of signals found for this scan
 				}
 			});
 		}
@@ -56,6 +64,12 @@ public class BluetoothSearchActivity extends ListActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		
+		// Initialize our signal adapter and hook it up to this activity
+		mSignalAdapter = new BluetoothSignalAdapter(this);
+		setContentView(R.layout.activity_bluetooth_search);
+		ListView listView = (ListView)findViewById(R.id.list_bt_devices);
+		listView.setAdapter(mSignalAdapter);
 		
 		mHandler = new Handler();
 		
@@ -85,10 +99,6 @@ public class BluetoothSearchActivity extends ListActivity {
 			// Adapter exists and is enabled already
 			scanLeDevice(true);
 		}
-		
-		// Initialize our signal adapter and hook it up to this activity
-		mSignalAdapter = new BluetoothSignalAdapter(this);
-		setListAdapter(mSignalAdapter);
 	}
 	
 	@Override
@@ -108,17 +118,33 @@ public class BluetoothSearchActivity extends ListActivity {
 					mScanning = false;
 					mBluetoothAdapter.stopLeScan(mLeScanCallback);
 					
+					
+					if (mCanSeeBeacon) {
+						// If a beacon was found, reset the wait period to 5s
+						mWaitPeriod = 5000;
+					}
+					else {
+						// Otherwise, back off the scanning interval (up to 5 min)
+						mWaitPeriod = Math.min(mWaitPeriod * 2, MAX_SCAN_INTERVAL);
+					}
+					
+					TextView scanIntervalView = (TextView)findViewById(R.id.scan_interval);
+					scanIntervalView.setText("Scan interval: " + (mWaitPeriod / 1000.0) + " sec");
+					
+					// TODO: After each scan, cache scan results to be sent to server
+					
 					mHandler.postDelayed(new Runnable() {
 						@Override
 						public void run() {
 							mSignalAdapter.clearData();
 							scanLeDevice(true);
 						}
-					}, WAIT_PERIOD);
+					}, mWaitPeriod);
 				}
 			}, SCAN_PERIOD);
 			
 			// Start scanning
+			mCanSeeBeacon = false;
 			mScanning = true;
 			mDate = new Date();
 			mBluetoothAdapter.startLeScan(mLeScanCallback);
